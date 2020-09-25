@@ -15,6 +15,7 @@ const http = require('http');
 const yaml = require('js-yaml');
 const fs = require('fs');
 const path = require('path');
+const { CMClient } = require('connector-protocol');
 
 const { WSO2Auth } = require('@mojaloop/sdk-standard-components');
 const { Logger, Transports } = require('@internal/log');
@@ -51,6 +52,10 @@ class InboundServer {
             tlsCreds: this._conf.tls.outbound.mutualTLS.enabled && this._conf.tls.outbound.creds,
         });
 
+        if (this._conf.managementEndpoint) {
+            this._setupManagementEndpoint();
+        }
+
         this._api.use(middlewares.createErrorHandler());
         this._api.use(middlewares.createRequestIdGenerator());
         this._api.use(middlewares.createHeaderValidator(this._logger));
@@ -77,6 +82,9 @@ class InboundServer {
 
     async start() {
         this._startJwsWatcher();
+        if (this._conf.managementEndpoint) {
+            this._cmClient.start();
+        }
         await this._cache.connect();
         if (!this._conf.testingDisableWSO2AuthStart) {
             await this._wso2Auth.start();
@@ -126,6 +134,24 @@ class InboundServer {
         };
 
         return new Cache(cacheConfig);
+    }
+
+    _setupManagementEndpoint() {
+        this._cmClient = new CMClient({ host: this._conf.managementEndpoint });
+
+        this._cmClient.dfspIdCallback = (dfspId) => {
+            // TODO: update DFSP ID
+        };
+
+        this._cmClient.jwsVerificationsKeysCallback = (keys) => {
+            Object.assign(this._jwsVerificationKeys, keys);
+        };
+        this._cmClient.inboundTlsConfigCallback = (keys) => {
+            // TODO
+        };
+        this._cmClient.outboundTlsConfigCallback = (keys) => {
+            // TODO
+        };
     }
 
     _createServer() {
